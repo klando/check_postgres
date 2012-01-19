@@ -30,7 +30,7 @@ $Data::Dumper::Varname = 'POSTGRES';
 $Data::Dumper::Indent = 2;
 $Data::Dumper::Useqq = 1;
 
-our $VERSION = '2.18.1';
+our $VERSION = '2.19.0';
 
 use vars qw/ %opt $PSQL $res $COM $SQL $db /;
 
@@ -102,9 +102,9 @@ our %msg = (
     'checkcluster-id'    => q{Database system identifier:},
     'checkcluster-msg'   => q{cluster_id: $1},
     'checkcluster-nomrtg'=> q{Must provide a number via the --mrtg option},
-    'checkmode-state'    => q{Database cluster state:},
-    'checkmode-recovery' => q{in archive recovery},
     'checkmode-prod'     => q{in production},
+    'checkmode-recovery' => q{in archive recovery},
+    'checkmode-state'    => q{Database cluster state:},
     'checkpoint-baddir'  => q{Invalid data_directory: "$1"},
     'checkpoint-baddir2' => q{pg_controldata could not read the given data directory: "$1"},
     'checkpoint-badver'  => q{Failed to run pg_controldata - probably the wrong version ($1)},
@@ -349,8 +349,12 @@ our %msg = (
     'bloat-nomin'        => q{aucune relation n'atteint le critère minimum de fragmentation},
     'bloat-table'        => q{(db $1) table $2.$3 lignes:$4 pages:$5 devrait être:$6 ($7X) place perdue:$8 ($9)},
     'bug-report'         => q{Merci de rapporter ces d??tails ?? check_postgres@bucardo.org:},
-    'checkmode-state'    => q{État de l'instance :},
+'checkcluster-id'    => q{Database system identifier:},
+'checkcluster-msg'   => q{cluster_id: $1},
+'checkcluster-nomrtg'=> q{Must provide a number via the --mrtg option},
+'checkmode-prod'     => q{in production},
     'checkmode-recovery' => q{en restauration d'archives},
+    'checkmode-state'    => q{État de l'instance :},
     'checkpoint-baddir'  => q{data_directory invalide : "$1"},
     'checkpoint-baddir2' => q{pg_controldata n'a pas pu lire le répertoire des données indiqué : « $1 »},
     'checkpoint-badver'  => q{Échec lors de l'exécution de pg_controldata - probablement la mauvaise version ($1)},
@@ -410,6 +414,7 @@ our %msg = (
     'logfile-stderr'     => q{La sortie des traces a été redirigés stderr : merci de fournir un nom de fichier},
     'logfile-syslog'     => q{La base de données utiliser syslog, merci de spécifier le chemin avec l'option --logfile (fac=$1)},
     'mode-standby'       => q{Serveur en mode standby},
+'mode'               => q{mode},
     'mrtg-fail'          => q{Échec de l'action $1 : $2},
     'new-ver-nocver'     => q{N'a pas pu t??l??charger les informations de version pour $1},
     'new-ver-badver'     => q{N'a pas pu analyser les informations de version pour $1},
@@ -899,7 +904,7 @@ if (defined $rcfile) {
             $name = "dbname$1";
         }
         elsif ($name =~ /^u(\d+)$/o) {
-            $name = 'dbuser$1';
+            $name = "dbuser$1";
         }
 
         ## These options are multiples ('@s')
@@ -1534,7 +1539,7 @@ sub make_sure_mode_is {
     $db->{host} = '<none>';
 
     ## Run pg_controldata, grab the mode
-	$res = open_controldata();
+    $res = open_controldata();
 
     my $regex = msg('checkmode-state');
     if ($res !~ /$regex\s*(.+)/) { ## no critic (ProhibitUnusedCapture)
@@ -1587,7 +1592,23 @@ sub finishup {
     ## Final output
     ## These are meant to be compact and terse: sometimes messages go to pagers
 
-    $MRTG and do_mrtg_stats();
+    if ($MRTG) {
+        ## Try hard to ferret out a message in case we short-circuited here
+        my $msg = [[]];
+        if (keys %critical) {
+            ($msg) = values %critical;
+        }
+        elsif (keys %warning) {
+            ($msg) = values %warning;
+        }
+        elsif (keys %ok) {
+            ($msg) = values %ok;
+        }
+        elsif (keys %unknown) {
+            ($msg) = values %unknown;
+        }
+        do_mrtg_stats($msg->[0][0]);
+    }
 
     $action =~ s/^\s*(\S+)\s*$/$1/;
     my $service = sprintf "%s$action", $FANCYNAME ? 'postgres_' : '';
@@ -1613,7 +1634,7 @@ sub finishup {
                 or ($DEBUGOUTPUT =~ /u/io and $type eq 'u');
         }
         for (sort keys %$info) {
-            printf "%s %s%s ",
+            printf '%s %s%s ',
                 $_,
                 $showdebug ? "[DEBUG: $DEBUG_INFO] " : '',
                 join $SEP => map { $_->[0] } @{$info->{$_}};
@@ -1922,7 +1943,7 @@ check_dbstats() if $action eq 'dbstats';
 ## Check how long since the last checkpoint
 check_checkpoint() if $action eq 'checkpoint';
 
-## Check the Datasbae System Identifier
+## Check the Database System Identifier
 check_cluster_id() if $action eq 'cluster_id';
 
 ## Check for disabled triggers
@@ -2393,31 +2414,31 @@ sub run_command {
 
             ## Transform psql output into an arrayref of hashes
             my @stuff;
-            my $num = 0;
+            my $lnum = 0;
             my $lastval;
             for my $line (split /\n/ => $db->{slurp}) {
 
                 if (index($line,'-')==0) {
-                    $num++;
+                    $lnum++;
                     next;
                 }
                 if ($line =~ /^([\?\w]+)\s+\| (.*)/) {
-                    $stuff[$num]{$1} = $2;
+                    $stuff[$lnum]{$1} = $2;
                     $lastval = $1;
                 }
                 elsif ($line =~ /^QUERY PLAN\s+\| (.*)/) {
-                    $stuff[$num]{queryplan} = $1;
+                    $stuff[$lnum]{queryplan} = $1;
                     $lastval = 'queryplan';
                 }
                 elsif ($line =~ /^\s+: (.*)/) {
-                    $stuff[$num]{$lastval} .= "\n$1";
+                    $stuff[$lnum]{$lastval} .= "\n$1";
                 }
                 elsif ($line =~ /^\s+\| (.+)/) {
-                    $stuff[$num]{$lastval} .= "\n$1";
+                    $stuff[$lnum]{$lastval} .= "\n$1";
                 }
                 ## No content: can happen in the source of functions, for example
                 elsif ($line =~ /^\s+\|\s+$/) {
-                    $stuff[$num]{$lastval} .= "\n";
+                    $stuff[$lnum]{$lastval} .= "\n";
                 }
                 else {
                     my $msg = msg('no-parse-psql');
@@ -2436,8 +2457,8 @@ sub run_command {
                     if (! $opt{stop_looping}) {
                         ## Just in case...
                         $opt{stop_looping} = 1;
-                        my $info = run_command('SELECT version() AS version');
-                        (my $v = $info->{db}[0]{slurp}[0]{version}) =~ s/(\w+ \S+).+/$1/;
+                        my $linfo = run_command('SELECT version() AS version');
+                        (my $v = $linfo->{db}[0]{slurp}[0]{version}) =~ s/(\w+ \S+).+/$1/;
                         warn "Postgres version: $v\n";
                     }
                     exit 1;
@@ -2879,8 +2900,10 @@ sub validate_range {
             ) {
             ndie msg('range-warnbig');
         }
-        $warning = int $warning if length $warning;
-        $critical = int $critical if length $critical;
+        if ($type !~ /string/) {
+            $warning = int $warning if length $warning;
+            $critical = int $critical if length $critical;
+        }
     }
     elsif ('restringex' eq $type) {
         if (! length $critical and ! length $warning) {
@@ -3159,8 +3182,8 @@ sub open_controldata {
         ndie msg('checkpoint-badver2');
     }
 
-	## return the pg_controldata output
-	return $res;
+    ## return the pg_controldata output
+    return $res;
 }
 
 
@@ -3712,7 +3735,7 @@ sub check_checkpoint {
     $db->{host} = '<none>';
 
     ## Run pg_controldata, grab the time
-	$res = open_controldata();
+    $res = open_controldata();
 
     my $regex = msg('checkpoint-po');
     if ($res !~ /$regex\s*(.+)/) { ## no critic (ProhibitUnusedCapture)
@@ -3798,12 +3821,12 @@ sub check_cluster_id {
     ## Example:
     ##  check_postgres_cluster_id --critical="5633695740047915125"
 
-    my ($warning, $critical) = validate_range({type => 'integer', onlyone => 1});
+    my ($warning, $critical) = validate_range({type => 'integer_string', onlyone => 1});
 
     $db->{host} = '<none>';
 
     ## Run pg_controldata, grab the cluster-id
-	$res = open_controldata();
+    $res = open_controldata();
 
     my $regex = msg('checkcluster-id');
     if ($res !~ /$regex\s*(.+)/) { ## no critic (ProhibitUnusedCapture)
@@ -4073,7 +4096,7 @@ SELECT pg_database_size(d.oid) AS dsize,
   datname,
   usename
 FROM pg_database d
-JOIN pg_user u ON (u.usesysid=d.datdba)$USERWHERECLAUSE
+LEFT JOIN pg_user u ON (u.usesysid=d.datdba)$USERWHERECLAUSE
 };
     if ($opt{perflimit}) {
         $SQL .= " ORDER BY 1 DESC LIMIT $opt{perflimit}";
@@ -4687,7 +4710,7 @@ sub check_hot_standby_delay {
     if (1 == $slave) {
         ($slave, $master) = (2, 1);
         for my $k (qw(host port dbname dbuser dbpass)) {
-            ($opt{$k}, $opt{$k . 2}) = ($opt{$k . 2}, $opt{$k});
+            ($opt{$k}, $opt{$k . 2}) = ($opt{$k . 2}, $opt{$k}); ## no critic (ProhibitMismatchedOperators)
         }
     }
 
@@ -4702,7 +4725,7 @@ sub check_hot_standby_delay {
         next if ! defined $location;
 
         my ($x, $y) = split(/\//, $location);
-        $moffset = (hex("ffffffff") * hex($x)) + hex($y);
+        $moffset = (hex('ff000000') * hex($x)) + hex($y);
         $saved_db = $db if ! defined $saved_db;
     }
 
@@ -4722,12 +4745,12 @@ sub check_hot_standby_delay {
 
         if (defined $receive) {
             my ($a, $b) = split(/\//, $receive);
-            $s_rec_offset = (hex("ffffffff") * hex($a)) + hex($b);
+            $s_rec_offset = (hex('ff000000') * hex($a)) + hex($b);
         }
 
         if (defined $replay) {
             my ($a, $b) = split(/\//, $replay);
-            $s_rep_offset = (hex("ffffffff") * hex($a)) + hex($b);
+            $s_rep_offset = (hex('ff000000') * hex($a)) + hex($b);
         }
 
         $saved_db = $db if ! defined $saved_db;
@@ -4880,7 +4903,7 @@ FROM (SELECT nspname, relname, $criteria AS v
             add_unknown (
                 $found ? $type eq 'vacuum' ? msg('vac-nomatch-v')
                 : msg('vac-nomatch-a')
-                : msg('no-match-table')
+                : msg('no-match-table') ## no critic (RequireTrailingCommaAtNewline)
             );
         }
         elsif ($maxtime < 0) {
@@ -5513,7 +5536,7 @@ sub check_pgbouncer_backends {
     }
 
     ## Grab information from the config
-    $SQL = qq{SHOW CONFIG};
+    $SQL = 'SHOW CONFIG';
 
     my $info = run_command($SQL, { regex => qr{\d+}, emptyok => 1 } );
 
@@ -5529,7 +5552,7 @@ sub check_pgbouncer_backends {
     }
 
     ## Grab information from pools
-    $SQL = qq{SHOW POOLS};
+    $SQL = 'SHOW POOLS';
 
     $info = run_command($SQL, { regex => qr{\d+}, emptyok => 1 } );
 
@@ -5874,7 +5897,7 @@ FROM pg_class c, pg_namespace n WHERE (relkind = %s) AND n.oid = c.relnamespace
 
             my $nicename = $kind eq 'r' ? "$schema.$name" : $name;
 
-            $db->{perf} .= sprintf "%s%s=%sB;%s;%s",
+            $db->{perf} .= sprintf '%s%s=%sB;%s;%s',
                 $VERBOSE==1 ? "\n" : ' ',
                 perfname($nicename), $size, $warning, $critical;
             ($max=$size, $pmax=$psize, $kmax=$kind, $nmax=$name, $smax=$schema) if $size > $max;
@@ -6456,13 +6479,13 @@ sub check_same_schema {
                         }
 
                         if (exists $tdiff->{list}{$col}{exists}) {
-                            my $e = $tdiff->{list}{$col}{exists};
-                            for my $name (sort keys %$e) {
+                            my $ex = $tdiff->{list}{$col}{exists};
+                            for my $name (sort keys %$ex) {
                                 push @msg => sprintf qq{  "%s":\n    %s\n},
                                     $col,
                                     msg('ss-notset', $name);
-                                my $isthere = join ', ' => sort { $a<=>$b } keys %{ $e->{$name}{isthere} };
-                                my $nothere = join ', ' => sort { $a<=>$b } keys %{ $e->{$name}{nothere} };
+                                my $isthere = join ', ' => sort { $a<=>$b } keys %{ $ex->{$name}{isthere} };
+                                my $nothere = join ', ' => sort { $a<=>$b } keys %{ $ex->{$name}{nothere} };
                                 push @msg => sprintf "      %-*s %s\n      %-*s %s\n",
                                     $maxsize, $msg_exists,
                                     $isthere,
@@ -6638,7 +6661,7 @@ sub read_audit_file {
     close $fh or warn qq{Could not close "$filename": $!\n};
 
     my $POSTGRES1;
-    eval $data;
+    eval $data; ## no critic (ProhibitStringyEval)
     if ($@) {
         die qq{Failed to parse file "$filename": $@\n};
     }
@@ -6977,6 +7000,7 @@ sub check_sequence {
     (my $c = $critical) =~ s/\D//;
 
     ## Gather up all sequence names
+    ## no critic
     my $SQL = q{
 SELECT DISTINCT ON (nspname, seqname) nspname, seqname,
   quote_ident(nspname) || '.' || quote_ident(seqname) AS safename, typname
@@ -7017,6 +7041,7 @@ FROM (
 ) AS seqs
 ORDER BY nspname, seqname, typname
 };
+    ## use critic
 
     my $info = run_command($SQL, {regex => qr{\w}, emptyok => 1} );
 
@@ -7199,7 +7224,7 @@ sub check_slony_status {
     }
 
     my $SLSQL =
-qq{SELECT
+q{SELECT
  ROUND(EXTRACT(epoch FROM st_lag_time)) AS lagtime,
  st_origin,
  st_received,
@@ -7340,19 +7365,19 @@ sub check_txn_idle {
 
     ## We don't GROUP BY because we want details on every connection
     ## Someday we may even break things down by database
-    if ($type ne "qtime") {
+    if ($type ne 'qtime') {
         $SQL = q{SELECT datname, datid, procpid, usename, client_addr, xact_start, current_query, }.
             q{CASE WHEN client_port < 0 THEN 0 ELSE client_port END AS client_port, }.
             qq{COALESCE(ROUND(EXTRACT(epoch FROM now()-$start)),0) AS seconds }.
             qq{FROM pg_stat_activity WHERE $clause$USERWHERECLAUSE }.
-            qq{ORDER BY xact_start, query_start, procpid DESC};
+            q{ORDER BY xact_start, query_start, procpid DESC};
     }
     else {
         $SQL = q{SELECT datname, datid, procpid, usename, client_addr, current_query, }.
             q{CASE WHEN client_port < 0 THEN 0 ELSE client_port END AS client_port, }.
             qq{COALESCE(ROUND(EXTRACT(epoch FROM now()-$start)),0) AS seconds }.
             qq{FROM pg_stat_activity WHERE $clause$USERWHERECLAUSE }.
-            qq{ORDER BY query_start, procpid DESC};
+            q{ORDER BY query_start, procpid DESC};
     }
 
     my $info = run_command($SQL, { emptyok => 1 } );
@@ -7368,7 +7393,7 @@ sub check_txn_idle {
     my $count = 0;
 
     ## Info about the top offender
-    my $whodunit = "";
+    my $whodunit = '';
     if ($MRTG) {
         if (defined $db->{dbname}) {
             $whodunit = "DB: $db->{dbname}";
@@ -7399,7 +7424,7 @@ sub check_txn_idle {
         }
 
         ## Detect other cases where pg_stat_activity is not fully populated
-        if ($type ne "qtime" and length $r->{xact_start} and $r->{xact_start} !~ /\d/o) {
+        if ($type ne 'qtime' and length $r->{xact_start} and $r->{xact_start} !~ /\d/o) {
             add_unknown msg('psa-noexact');
             return;
         }
@@ -7508,8 +7533,8 @@ sub check_txn_idle {
 
 sub check_txn_time {
 
-    ## This is the same as check_txn_idle, but we want where the time is not null
-    ## as well as excluding any idle in transactions
+    ## This is the same as check_txn_idle, but we want where the 
+    ## transaction start time is not null
 
     check_txn_idle('txntime',
                    '',
@@ -7708,7 +7733,7 @@ sub check_wal_files {
 
 B<check_postgres.pl> - a Postgres monitoring script for Nagios, MRTG, Cacti, and others
 
-This documents describes check_postgres.pl version 2.18.1
+This documents describes check_postgres.pl version 2.19.0
 
 =head1 SYNOPSIS
 
@@ -9494,16 +9519,21 @@ Items not specifically attributed are by GSM (Greg Sabino Mullane).
 
 =over 4
 
-=item B<Version 2.19.0>
+=item B<Version 2.19.0> January 17, 2012
 
   Add the --assume-prod option (Cédric Villemain)
+
   Add the cluster_id check (Cédric Villemain)
+
   Improve settings_checksum and checkpoint tests (Cédric Villemain)
 
-=item B<Version 2.18.1>
+  Do no do an inner join to pg_user when checking database size
+    (Greg Sabino Mullane; reported by Emmanuel Lesouef)
 
   Use the full path when getting sequence information for same_schema.
     (Greg Sabino Mullane; reported by Cindy Wise)
+
+  Fix the formula for calculating xlog positions (Euler Taveira de Oliveira)
 
   Better ordering of output for bloat check - make indexes as important
     as tables (Greg Sabino Mullane; reported by Jens Wilke)
@@ -10138,7 +10168,7 @@ Some example Nagios configuration settings using this script:
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2007-2011 Greg Sabino Mullane <greg@endpoint.com>.
+Copyright (c) 2007-2012 Greg Sabino Mullane <greg@endpoint.com>.
 
 Redistribution and use in source and binary forms, with or without 
 modification, are permitted provided that the following conditions are met:
