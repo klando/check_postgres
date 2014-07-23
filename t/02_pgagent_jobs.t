@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!perl
 
 ## Test the "pgagent_jobs" action
 
@@ -6,7 +6,6 @@ use 5.006;
 use strict;
 use warnings;
 use Test::More tests => 48;
-#use Test::More 'no_plan';
 use lib 't','.';
 use CP_Testing;
 
@@ -24,8 +23,12 @@ like $cp->run('-c=abc'), qr{must be a valid time}, "$S fails with invalid -c";
 
 # Set up a dummy pgagent schema.
 $dbh->{AutoCommit} = 1;
+
+$dbh->do('DROP SCHEMA IF EXISTS pgagent CASCADE');
+
 $dbh->do(q{
     SET client_min_messages TO warning;
+
     CREATE SCHEMA pgagent;
 
     CREATE TABLE pgagent.pga_job (
@@ -36,6 +39,7 @@ $dbh->do(q{
     CREATE TABLE pgagent.pga_jobstep (
         jstid     serial  NOT NULL PRIMARY KEY,
         jstjobid  int4    NOT NULL REFERENCES pgagent.pga_job(jobid),
+        jstkind   char    NOT NULL DEFAULT 'b',
         jstname   text    NOT NULL
     );
 
@@ -54,11 +58,7 @@ $dbh->do(q{
     );
     RESET client_min_messages;
 });
-END { $dbh->do(q{
-    SET client_min_messages TO warning;
-    DROP SCHEMA pgagent CASCADE;
-    RESET client_min_messages;
-}) if $dbh; }
+END { $dbh->do('DROP SCHEMA IF EXISTS pgagent CASCADE'); }
 
 like $cp->run('-c=1d'), qr{^$label OK: DB "postgres"}, "$S returns ok for no jobs";
 
@@ -193,7 +193,7 @@ like $cp->run('-w=5h -c=5h'),
     qr{^$label CRITICAL: DB "postgres" [()][^)]+[)] 255 Restore/analyze: WTF!},
     "$S -w=5h -c=5h returns critical with failed job within our time";
 
-# Go back futher in time!
+# Go back further in time!
 like $cp->run('-w=30h -c=2h'),
     qr{^$label WARNING: DB "postgres" [()][^)]+[)] 255 Restore/analyze: WTF!},
     "$S -w=30h -c=5h returns warning for older failed job";

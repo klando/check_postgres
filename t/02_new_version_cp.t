@@ -6,11 +6,17 @@ use 5.006;
 use strict;
 use warnings;
 use Data::Dumper;
-use Test::More tests => 4;
+use Test::More;
 use lib 't','.';
 use CP_Testing;
 
 use vars qw/$dbh $t $info/;
+
+if ($ENV{SKIP_NETWORK_TESTS}) {
+    plan (skip_all => 'Skipped because environment variable SKIP_NETWORK_TESTS is set');
+} else {
+    plan tests => 4;
+}
 
 my $cp = CP_Testing->new( {default_action => 'new_version_cp'} );
 
@@ -26,7 +32,7 @@ $t=qq{$S returns warning for mismatched major version};
 $cp->fake_self_version('1.2.3');
 $info = $cp->run('');
 like ($info, qr{$label WARNING:  Please upgrade to version \d+\.\d+\.\d+ of check_postgres. You are running 1.2.3}, $t);
-$info =~ /((\d+\.\d+\.)(\d+))/ or die "Invalid version!?\n";
+$info =~ /((\d+\.\d+)\.(\d+))/ or die "Invalid version!?\n";
 my ($current_version,$cmaj,$crev) = ($1,$2,$3);
 
 $t=qq{$S returns okay for matching version};

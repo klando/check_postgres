@@ -159,8 +159,10 @@ http
 logfile
 login
 perl
+pgagent
 pgbouncer
 pgBouncer
+pgservice
 plpgsql
 postgres
 Pre
@@ -212,6 +214,8 @@ xmlns
 ## check_postgres.pl:
 
 Abrigo
+Ahlgren
+Ahlgren
 Albe
 alice
 Andras
@@ -230,9 +234,13 @@ Basename
 battlestar
 baz
 bigint
+Blasco
+Blasco
 blks
 Boes
 boxinfo
+Bracht
+Bracht
 Bucardo
 burrick
 cd
@@ -277,6 +285,8 @@ dric
 dylan
 EB
 Eisentraut
+Eloranta
+Eloranta
 emma
 endcrypt
 EnterpriseDB
@@ -287,6 +297,7 @@ exabytes
 excludeuser
 excludeusers
 ExclusiveLock
+executables
 faceoff
 filename
 filenames
@@ -299,8 +310,12 @@ FreeBSD
 freespacemap
 fsm
 garrett
+Geert
+Geert
 Getopt
 GetOptions
+github
+github
 Glaesemann
 Glyn
 greg
@@ -311,6 +326,8 @@ Guettler
 Guillaume
 Gurjeet
 hardcode
+Henrik
+Henrik
 HiRes
 hitratio
 hitratio
@@ -334,6 +351,8 @@ idxtupread
 includeuser
 Ioannis
 ioguix
+Jacobo
+Jacobo
 Jehan
 Jens
 Kabalin
@@ -346,6 +365,7 @@ lancre
 Laurenz
 Lelarge
 Lesouef
+libpq
 listinfo
 localhost
 localtime
@@ -361,6 +381,8 @@ maxalign
 maxwait
 mcp
 MERCHANTABILITY
+Mika
+Mika
 MINIPAGES
 MINPAGES
 minvalue
@@ -396,14 +418,19 @@ oper
 Optimizations
 oskar
 pageslots
+Pante
+Pante
 param
 parens
+Patric
+Patric
 perf
 perfdata
 perflimit
 perfname
 perfs
 petabytes
+pgAgent
 pgb
 PGBINDIR
 pgbouncer's
@@ -437,8 +464,14 @@ refactor
 refactoring
 regex
 regexes
+relallvisible
+relallvisible
+relminmxid
+relminmxid
 relname
 relpages
+Renner
+Renner
 repinfo
 RequireInterpolationOfMetachars
 ret
@@ -470,12 +503,15 @@ Slony
 Slony's
 snazzo
 speedtest
+Sprickman
+Sprickman
 sql
 SQL
 ssel
 sslmode
 Stas
 stderr
+STDOUT
 sv
 symlink
 symlinked
@@ -492,6 +528,8 @@ timesync
 tmp
 tnm
 Tolley
+totalwastedbytes
+totalwastedbytes
 tup
 undef
 unlinked
@@ -501,9 +539,12 @@ USERNAME
 usernames
 USERWHERECLAUSE
 usr
+utf
 valtype
 Villemain
 Vitkovsky
+Waisbrot
+Waisbrot
 wal
 WAL
 watson
@@ -516,4 +557,3 @@ xact
 xlog
 Yamada
 Zwerschke
-

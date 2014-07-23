@@ -123,7 +123,7 @@
 <hr />
 <h1><a name="name">NAME</a></h1>
 <p><strong>check_postgres.pl</strong> - a Postgres monitoring script for Nagios, MRTG, Cacti, and others</p>
-<p>This documents describes check_postgres.pl version 2.19.0</p>
+<p>This documents describes check_postgres.pl version 2.21.0</p>
 <p>
 </p>
 <hr />
@@ -139,7 +139,7 @@
   check_postgres_connection --db=pluto</pre>
 <pre>
   ## Warn if &gt; 100 locks, critical if &gt; 200, or &gt; 20 exclusive
-  check_postgres_locks --warning=100 --critical=&quot;total=200;exclusive=20&quot;</pre>
+  check_postgres_locks --warning=100 --critical=&quot;total=200:exclusive=20&quot;</pre>
 <pre>
   ## Show the current number of idle connections on port 6543:
   check_postgres_txn_idle --port=6543 --output=simple</pre>
@@ -265,9 +265,14 @@ Instead, one should use a .pgpass or pg_service.conf file.</p>
 <dt><strong><a name="dbservice_name" class="item"><strong>--dbservice=NAME</strong></a></strong></dt>
 
 <dd>
-<p>The name of a service inside of the pg_service.conf file. This file is in your home directory by 
-default and contains a simple list of connection options. You can also pass additional information 
+<p>The name of a service inside of the pg_service.conf file. Before version 9.0 of Postgres, this is 
+a global file, usually found in /etc/pg_service.conf. If you are using version 9.0 or higher of 
+Postgres, you can use the file &quot;.pg_service.conf&quot; in the home directory of the user running 
+the script, e.g. nagios.</p>
+<p>This file contains a simple list of connection options. You can also pass additional information 
 when using this option such as --dbservice=&quot;maindatabase sslmode=require&quot;</p>
+<p>The documentation for this file can be found at
+<a href="http://www.postgresql.org/docs/current/static/libpq-pgservice.html">http://www.postgresql.org/docs/current/static/libpq-pgservice.html</a></p>
 </dd>
 </dl>
 <p>The database connection options can be grouped: <em>--host=a,b --host=c --port=1234 --port=3344</em>
@@ -392,10 +397,22 @@ Only takes effect if using Nagios output mode.</p>
 <dd>
 <p>Enables test mode. See the <a href="#test_mode">TEST MODE</a> section below.</p>
 </dd>
+<dt><strong><a name="pgbindir_path" class="item"><strong>--PGBINDIR=PATH</strong></a></strong></dt>
+
+<dd>
+<p>Tells the script where to find the psql binaries. Useful if you have more than
+one version of the PostgreSQL executables on your system, or if there are not
+in your path. Note that this option is in all uppercase. By default, this option
+is <em>not allowed</em>. To enable it, you must change the <code>$NO_PSQL_OPTION</code> near the
+top of the script to 0. Avoid using this option if you can, and instead use
+environment variable c&lt;PGBINDIR&gt; or hard-coded <code>$PGBINDIR</code> variable, also near
+the top of the script, to set the path to the PostgreSQL to use.</p>
+</dd>
 <dt><strong><a name="psql_path" class="item"><strong>--PSQL=PATH</strong></a></strong></dt>
 
 <dd>
-<p>Tells the script where to find the psql program. Useful if you have more than 
+<p><em>(deprecated, this option may be removed in a future release!)</em>
+Tells the script where to find the psql program. Useful if you have more than 
 one version of the psql executable on your system, or if there is no psql program 
 in your path. Note that this option is in all uppercase. By default, this option 
 is <em>not allowed</em>. To enable it, you must change the <code>$NO_PSQL_OPTION</code> near the 
@@ -596,9 +613,8 @@ processing shipped WAL files, and is meant to check that your warm standby is tr
 The data directory must be set, either by the environment variable <code>PGDATA</code>, or passing 
 the <code>--datadir</code> argument. It returns the number of seconds since the last checkpoint 
 was run, as determined by parsing the call to <code>pg_controldata</code>. Because of this, the 
-pg_controldata executable must be available in the current path. Alternatively, you can 
-set the environment variable <code>PGCONTROLDATA</code> to the exact location of the pg_controldata 
-executable, or you can specify <code>PGBINDIR</code> as the directory that it lives in.
+pg_controldata executable must be available in the current path. Alternatively,
+you can specify <code>PGBINDIR</code> as the directory that it lives in.
 It is also possible to use the special options <em>--assume-prod</em> or
 <em>--assume-standby-mode</em>, if the mode found is not the one expected, a CRITICAL is emitted.</p>
 <p>At least one warning or critical argument must be set.</p>
@@ -871,7 +887,7 @@ maps to a file system: these can be included or excluded. See the
 <a href="#basic_filtering">BASIC FILTERING</a> section for more details.</p>
 <p>Example 1: Make sure that no file system is over 90% for the database on port 5432.</p>
 <pre>
-  check_postgres_disk_space --port=5432 --warning='90%' --critical=&quot;90%'</pre>
+  check_postgres_disk_space --port=5432 --warning='90%' --critical='90%'</pre>
 <p>Example 2: Check that all file systems starting with /dev/sda are smaller than 10 GB and 11 GB (warning and critical)</p>
 <pre>
   check_postgres_disk_space --port=5432 --warning='10 GB' --critical='11 GB' --include=&quot;~^/dev/sda&quot;</pre>
@@ -920,7 +936,7 @@ the second line.</p>
 <p>
 </p>
 <h2><a name="hitratio"><strong>hitratio</strong></a></h2>
-<p>(<code>symlink: check_postgres_database_hitratio</code>) Checks the hit ratio of all databases and complains when they are too low.
+<p>(<code>symlink: check_postgres_hitratio</code>) Checks the hit ratio of all databases and complains when they are too low.
 There is no need to run this command more than once per database cluster. 
 Databases can be filtered with 
 the <em>--include</em> and <em>--exclude</em> options. See the <a href="#basic_filtering">BASIC FILTERING</a> section 
@@ -934,7 +950,7 @@ cannot be greater than the critical value. The output returns all databases sort
 hitratio, smallest first.</p>
 <p>Example: Warn if any database on host flagg is less than 90% in hitratio, and critical if less then 80%.</p>
 <pre>
-  check_postgres_database_hitratio --host=flagg --warning='90%' --critical='80%'</pre>
+  check_postgres_hitratio --host=flagg --warning='90%' --critical='80%'</pre>
 <p>For MRTG output, returns the percentage of the database with the smallest hitratio on the first line, 
 and the name of the database on the fourth line.</p>
 <p>
@@ -1058,13 +1074,13 @@ which represent the total number of locks, or they can be broken down by type of
 Valid lock names are <code>'total'</code>, <code>'waiting'</code>, or the name of a lock type used by Postgres. 
 These names are case-insensitive and do not need the &quot;lock&quot; part on the end, 
 so <strong>exclusive</strong> will match 'ExclusiveLock'. The format is name=number, with different 
-items separated by semicolons.</p>
+items separated by colons or semicolons (or any other symbol).</p>
 <p>Example 1: Warn if the number of locks is 100 or more, and critical if 200 or more, on host garrett</p>
 <pre>
   check_postgres_locks --host=garrett --warning=100 --critical=200</pre>
 <p>Example 2: On the host artemus, warn if 200 or more locks exist, and give a critical if over 250 total locks exist, or if over 20 exclusive locks exist, or if over 5 connections are waiting for a lock.</p>
 <pre>
-  check_postgres_locks --host=artemus --warning=200 --critical=&quot;total=250;waiting=5;exclusive=20&quot;</pre>
+  check_postgres_locks --host=artemus --warning=200 --critical=&quot;total=250:waiting=5:exclusive=20&quot;</pre>
 <p>For MRTG output, returns the number of locks on the first line, and the name of the database on the fourth line.</p>
 <p>
 </p>
@@ -1718,7 +1734,8 @@ check_postgresrc files can be ignored by supplying a <code>--no-checkpostgresrc<
 </p>
 <hr />
 <h1><a name="environment_variables">ENVIRONMENT VARIABLES</a></h1>
-<p>The environment variable <em>$ENV{HOME}</em> is used to look for a <em class="file">.check_postgresrc</em> file.</p>
+<p>The environment variable <em>$ENV{HOME}</em> is used to look for a <em class="file">.check_postgresrc</em> file.
+The environment variable <em>$ENV{PGBINDIR}</em> is used to look for PostgreSQL binaries.</p>
 <p>
 </p>
 <hr />
@@ -1776,6 +1793,81 @@ feature requests, and commit notices, send email to <a href="mailto:check_postgr
 <h1><a name="history">HISTORY</a></h1>
 <p>Items not specifically attributed are by GSM (Greg Sabino Mullane).</p>
 <dl>
+<dt><strong><a name="version_2_21_0_september_24_2013" class="item"><strong>Version 2.21.0</strong> September 24, 2013</a></strong></dt>
+
+<dd>
+<pre>
+  Fix issue with SQL steps in check_pgagent_jobs for sql steps which perform deletes
+    (Rob Emery via github pull)</pre>
+<pre>
+  Install man page in section 1. (Peter Eisentraut, bug 53, github issue 26)</pre>
+<pre>
+  Order lock types in check_locks output to make the ordering predictable;
+  setting SKIP_NETWORK_TESTS will skip the new_version tests; other minor test
+  suite fixes. (Christoph Berg)</pre>
+<pre>
+  Fix same_schema check on 9.3 by ignoring relminmxid differences in pg_class
+    (Christoph Berg)</pre>
+</dd>
+<dt><strong><a name="version_2_20_1_june_24_2013" class="item"><strong>Version 2.20.1</strong> June 24, 2013</a></strong></dt>
+
+<dd>
+<pre>
+  Make connection check failures return CRITICAL not UNKNOWN
+    (Dominic Hargreaves)</pre>
+<pre>
+  Fix --reverse option when using string comparisons in custom queries
+    (Nathaniel Waisbrot)</pre>
+<pre>
+  Compute correct 'totalwastedbytes' in the bloat query
+    (Michael Renner)</pre>
+<pre>
+  Do not use pg_stats &quot;inherited&quot; column in bloat query, if the
+    database is 8.4 or older. (Greg Sabino Mullane, per bug 121)</pre>
+<pre>
+  Remove host reordering in hot_standby_delay check
+    (Josh Williams, with help from Jacobo Blasco)</pre>
+<pre>
+  Better output for the &quot;simple&quot; flag
+    (Greg Sabino Mullane)</pre>
+<pre>
+  Force same_schema to ignore the 'relallvisible' column
+    (Greg Sabino Mullane)</pre>
+</dd>
+<dt><strong><a name="version_2_20_0_march_13_2013" class="item"><strong>Version 2.20.0</strong> March 13, 2013</a></strong></dt>
+
+<dd>
+<pre>
+  Add check for pgagent jobs (David E. Wheeler)</pre>
+<pre>
+  Force STDOUT to use utf8 for proper output
+    (Greg Sabino Mullane; reported by Emmanuel Lesouef)</pre>
+<pre>
+  Fixes for Postgres 9.2: new pg_stat_activity view,
+    and use pg_tablespace_location, (Josh Williams)</pre>
+<pre>
+  Allow for spaces in item lists when doing same_schema.</pre>
+<pre>
+  Allow txn_idle to work again for &lt; 8.3 servers by switching to query_time.</pre>
+<pre>
+  Fix the check_bloat SQL to take inherited tables into account,
+    and assume 2k for non-analyzed columns. (Geert Pante)</pre>
+<pre>
+  Cache sequence information to speed up same_schema runs.</pre>
+<pre>
+  Fix --excludeuser in check_txn_idle (Mika Eloranta)</pre>
+<pre>
+  Fix user clause handling in check_txn_idle (Michael van Bracht)</pre>
+<pre>
+  Adjust docs to show colon as a better separator inside args for locks
+    (Charles Sprickman)</pre>
+<pre>
+  Fix undefined $SQL2 error in check_txn_idle [github issue 16] (Patric Bechtel)</pre>
+<pre>
+  Prevent &quot;uninitialized value&quot; warnings when showing the port (Henrik Ahlgren)</pre>
+<pre>
+  Do not assume everyone has a HOME [github issue 23]</pre>
+</dd>
 <dt><strong><a name="version_2_19_0_january_17_2012" class="item"><strong>Version 2.19.0</strong> January 17, 2012</a></strong></dt>
 
 <dd>
@@ -1786,7 +1878,7 @@ feature requests, and commit notices, send email to <a href="mailto:check_postgr
 <pre>
   Improve settings_checksum and checkpoint tests (Cédric Villemain)</pre>
 <pre>
-  Do no do an inner join to pg_user when checking database size
+  Do not do an inner join to pg_user when checking database size
     (Greg Sabino Mullane; reported by Emmanuel Lesouef)</pre>
 <pre>
   Use the full path when getting sequence information for same_schema.
@@ -2611,7 +2703,7 @@ feature requests, and commit notices, send email to <a href="mailto:check_postgr
 </p>
 <hr />
 <h1><a name="license_and_copyright">LICENSE AND COPYRIGHT</a></h1>
-<p>Copyright (c) 2007-2012 Greg Sabino Mullane &lt;<a href="mailto:greg@endpoint.com">greg@endpoint.com</a>&gt;.</p>
+<p>Copyright (c) 2007-2013 Greg Sabino Mullane &lt;<a href="mailto:greg@endpoint.com">greg@endpoint.com</a>&gt;.</p>
 <p>Redistribution and use in source and binary forms, with or without 
 modification, are permitted provided that the following conditions are met:</p>
 <pre>
